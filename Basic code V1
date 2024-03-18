@@ -1,0 +1,182 @@
+#include "BLEDevice.h"
+#include "jled.h"
+
+const String sketchName = "ESP32 HRM BLE Smart Fan";
+const uint8_t PWM_PIN = 23;  // Pin PWM per il controllo del ventilatore
+const uint8_t TRIAC_MAX = 255; // Massimo valore per il controllo del Triac
+boolean connected = false;
+
+// The remote service we wish to connect to.
+static BLEUUID serviceUUID(BLEUUID((uint16_t)0x180D));
+// The characteristic of the remote service we are interested in.
+// this is the standard ID of the HEART RATE characteristic
+static BLEUUID charUUID(BLEUUID((uint16_t)0x2A37));
+
+static BLEAddress *pServerAddress;
+static boolean doConnect = false;
+static boolean notification = false;
+static BLERemoteCharacteristic* pRemoteCharacteristic;
+
+auto led = JLed(17).Breathe(2000).DelayAfter(1000).Forever(); // LED di stato
+
+//--------------------------------------------------------------------------------------------
+// Setup the Serial Port and output Sketch name and compile date
+//--------------------------------------------------------------------------------------------
+void startSerial(uint32_t baud) {
+  // Setup Serial Port at 115200 Baud
+  Serial.begin(baud);
+  delay(10);
+  Serial.println();
+  Serial.print(sketchName);
+  Serial.print(F(" | Compiled: "));
+  Serial.print(__DATE__);
+  Serial.print(F("/"));
+  Serial.println(__TIME__);
+}
+
+static void notifyCallback(
+  BLERemoteCharacteristic* pBLERemoteCharacteristic,
+  uint8_t* pData,
+  size_t length,
+  bool isNotify) {
+    Serial.print("Notify callback for characteristic ");
+    Serial.print(pBLERemoteCharacteristic->getUUID().toString().c_str());
+    Serial.print(" of data length ");
+    Serial.print(length);
+    Serial.print(" data: ");
+    for (int i = 0; i < length; i++) {
+      Serial.print(pData[i]);
+    }
+    Serial.println();
+
+    uint16_t heartRate = pData[1];
+    Serial.print("Heart Rate ");
+    Serial.print(heartRate, DEC);
+    Serial.println(" bpm");
+
+    // Regola la velocità del ventilatore in base al battito cardiaco
+    // Modifica questa logica in base alle tue esigenze
+    if (heartRate < 80) {
+        analogWrite(PWM_PIN, 0); // Spegni il ventilatore per battiti cardiaci bassi
+    } else if (heartRate >= 80 && heartRate < 100) {
+        analogWrite(PWM_PIN, TRIAC_MAX * 0.25); // Imposta il ventilatore al 25% della velocità massima
+    } else if (heartRate >= 100 && heartRate < 120) {
+        analogWrite(PWM_PIN, TRIAC_MAX * 0.3); // Imposta il ventilatore al 50% della velocità massima
+    } else if (heartRate >= 120 && heartRate < 130) {
+        analogWrite(PWM_PIN, TRIAC_MAX * 0.4); // Imposta il ventilatore al 75% della velocità massima
+    } else if (heartRate >= 130 && heartRate < 140) {
+        analogWrite(PWM_PIN, TRIAC_MAX * 0.50); // Imposta il ventilatore al 75% della velocità massima
+    } else if (heartRate >= 140 && heartRate < 150) {
+        analogWrite(PWM_PIN, TRIAC_MAX * 0.65); // Imposta il ventilatore al 75% della velocità massima
+    } else if (heartRate >= 150 && heartRate < 160) {
+        analogWrite(PWM_PIN, TRIAC_MAX * 0.8); // Imposta il ventilatore al 75% della velocità massima
+    } else {
+        analogWrite(PWM_PIN, TRIAC_MAX); // Imposta il ventilatore alla massima velocità per battiti cardiaci elevati
+    }
+}
+
+//--------------------------------------------------------------------------------------------
+//  Connect to BLE HRM
+//--------------------------------------------------------------------------------------------
+bool connectToServer(BLEAddress pAddress) {
+    Serial.print(F("Forming a connection to "));
+    Serial.println(pAddress.toString().c_str());
+    
+    BLEClient*  pClient  = BLEDevice::createClient();
+    Serial.println(F(" - Created client"));
+
+    // Connect to the HRM BLE Server.
+    // Note that a lot of example snippets I found on the web ommitted the second argument (optional) in the following line
+    // but the BT connection was very slow and hang up most of the time
+    // once I added "BLE_ADDR_TYPE_RANDOM" the connection was very quick and smooth
+    pClient->connect(pAddress, BLE_ADDR_TYPE_RANDOM);
+    Serial.println(F(" - Connected to server"));
+
+    // Obtain a reference to the service we are after in the remote BLE server.
+    BLERemoteService* pRemoteService = pClient->getService(serviceUUID);
+    if (pRemoteService == nullptr) {
+      Serial.print(F("Failed to find our service UUID: "));
+      Serial.println(serviceUUID.toString().c_str());
+      return false;
+    }
+    Serial.println(F(" - Found our service"));
+
+    // Obtain a reference to the characteristic in the service of the remote BLE server.
+    pRemoteCharacteristic = pRemoteService->getCharacteristic(charUUID);
+    if (pRemoteCharacteristic == nullptr) {
+      Serial.print(F("Failed to find our characteristic UUID: "));
+      Serial.println(charUUID.toString().c_str());
+      return false;
+    }
+    Serial.println(F(" - Found our characteristic"));
+
+    // Read the value of the characteristic.
+    std::string value = pRemoteCharacteristic->readValue();
+    Serial.print("The characteristic value was: ");
+    Serial.println(value.c_str());
+
+    // Register for Notify
+    pRemoteCharacteristic->registerForNotify(notifyCallback);
+    return true;
+}
+
+/**
+ * Scan for BLE servers and find the first one that advertises the service we are looking for.
+ */
+class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
+  void onResult(BLEAdvertisedDevice advertisedDevice) {
+    Serial.print("BLE Advertised Device found: ");
+    Serial.println(advertisedDevice.toString().c_str());
+
+    // We have found a device, let us now see if it contains the service we are looking for.
+    if (advertisedDevice.haveServiceUUID() && advertisedDevice.getServiceUUID().equals(serviceUUID)) {
+      Serial.println("Found our device!"); 
+      advertisedDevice.getScan()->stop();
+
+      pServerAddress = new BLEAddress(advertisedDevice.getAddress());
+      doConnect = true;
+    }
+  }
+};
+
+void setup() {
+  startSerial(115200);
+    
+  pinMode(PWM_PIN, OUTPUT);// Set PWM pin as output
+
+  Serial.println("Starting Arduino BLE Client application...");
+  BLEDevice::init("");
+
+  // Retrieve a Scanner and set the callback we want to use to be informed when we
+  // have detected a new device. Specify that we want active scanning and start the
+  // scan to run for 30 seconds.
+  BLEScan* pBLEScan = BLEDevice::getScan();
+  pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
+  pBLEScan->setActiveScan(true);
+  pBLEScan->start(30); 
+}
+
+void loop() {
+  if (doConnect == true) {
+    if (connectToServer(*pServerAddress)) {
+      Serial.println("We are now connected to the BLE Server.");
+      connected = true;
+      led = JLed(17).On();
+    } else {
+      Serial.println("We have failed to connect to the server; there is nothin more we will do.");
+      led = JLed(17).Blink(500, 500).Forever();
+    }
+    doConnect = false;
+  }
+
+  // Turn notification on 
+  // to subscribe to heart rate updates
+  if (connected && !notification) {
+    Serial.println(F("Turning Notification On"));
+    const uint8_t onPacket[] = {0x1, 0x0};
+    pRemoteCharacteristic->getDescriptor(BLEUUID((uint16_t)0x2902))->writeValue((uint8_t*)onPacket, 2, true);
+    notification = true;
+  }
+
+  led.Update();
+}
