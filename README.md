@@ -8,10 +8,16 @@ It must be noted that I have NO background or specific knowledge about coding, n
 What you need:
 
 An ESP32 module (I used a NODEMCU module from Aliexpress, about 4 EUR) and its accessories (power, some cables).
-A PWM Triac controller board. I bought one on Amazon (12 EUR), but there are many on Aliexpress (much cheaper). Any power will be enough (mine is one of the smallest with 600W capacity, and the fan is less than 100W). 
+
+A PWM Triac controller board. I bought one on Amazon (12 EUR), but there are many on Aliexpress (much cheaper). 
+Any power will be enough (mine is one of the smallest with 600W capacity, and the fan is less than 100W). 
+
 A 230VAC fan. Any cheap domestic 3-speed fan will work.
+
 An HRM sensor. Any heart rate Bluetooth (BLE) band will work. I personally use a Polar H9.
+
 A smartphone with the nRF Connect app to sniff the BLE connections and addresses (optional-the code is made to connect directly to heart rate monitor service).
+
 An ANT+ key (optional). We will use the Bluetooth signal from the HRM band, so if you want to use Zwift or any other computer app, I strongly suggest separating the signals and using ANT+ to connect to the computer. You will not be able to use a tablet for Zwift or your cycling app (as they use Bluetooth only). Eventually, try to find a heart rate band with multipoint Bluetooth (able to connect with multiple devices), but I don't know if they exist.
 
 Let's start with your HRM band on. Open nRF connect on your phone and connect to the band. Write down its MAC address and look through the services. You need to find the two services related to the heart rate. They should be 0x180D and 0x2A37. These values should be identical on all HRM bands. With this code, there's no need to indicate to a specific MAC address. The BLE module of the ESP32 will scan all the devices in range looking for UUID services 0x180D and 0x2A37.
