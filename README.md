@@ -1,5 +1,5 @@
-# Zwift
-HRM Controlled Fan with ESP32
+# HRM Controlled Fan with ESP32
+
 
 First of all, a big shoutout to Jonathan (jludwig75) from whom I took inspiration for the code. Also, a huge thanks to the OpenAI team for their ChatGPT, which I extensively used.
 
