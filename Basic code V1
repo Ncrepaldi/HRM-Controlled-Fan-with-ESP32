@@ -2,8 +2,8 @@
 #include "jled.h"
 
 const String sketchName = "ESP32 HRM BLE Smart Fan";
-const uint8_t PWM_PIN = 23;  // Pin PWM per il controllo del ventilatore
-const uint8_t TRIAC_MAX = 255; // Massimo valore per il controllo del Triac
+const uint8_t PWM_PIN = 23;  // Pin PWM Fan control
+const uint8_t TRIAC_MAX = 255; // Triac Max value
 boolean connected = false;
 
 // The remote service we wish to connect to.
@@ -17,7 +17,7 @@ static boolean doConnect = false;
 static boolean notification = false;
 static BLERemoteCharacteristic* pRemoteCharacteristic;
 
-auto led = JLed(17).Breathe(2000).DelayAfter(1000).Forever(); // LED di stato
+auto led = JLed(17).Breathe(2000).DelayAfter(1000).Forever(); // Status led (to be tested)
 
 //--------------------------------------------------------------------------------------------
 // Setup the Serial Port and output Sketch name and compile date
@@ -54,24 +54,24 @@ static void notifyCallback(
     Serial.print(heartRate, DEC);
     Serial.println(" bpm");
 
-    // Regola la velocità del ventilatore in base al battito cardiaco
-    // Modifica questa logica in base alle tue esigenze
+    // Regulate the fan speed according to heart rate
+    // Modify according to your needs
     if (heartRate < 80) {
-        analogWrite(PWM_PIN, 0); // Spegni il ventilatore per battiti cardiaci bassi
+        analogWrite(PWM_PIN, 0); // Fan shut off
     } else if (heartRate >= 80 && heartRate < 100) {
-        analogWrite(PWM_PIN, TRIAC_MAX * 0.25); // Imposta il ventilatore al 25% della velocità massima
+        analogWrite(PWM_PIN, TRIAC_MAX * 0.25); // 25% fan speed
     } else if (heartRate >= 100 && heartRate < 120) {
-        analogWrite(PWM_PIN, TRIAC_MAX * 0.3); // Imposta il ventilatore al 50% della velocità massima
+        analogWrite(PWM_PIN, TRIAC_MAX * 0.3); // 30% fan speed
     } else if (heartRate >= 120 && heartRate < 130) {
-        analogWrite(PWM_PIN, TRIAC_MAX * 0.4); // Imposta il ventilatore al 75% della velocità massima
+        analogWrite(PWM_PIN, TRIAC_MAX * 0.4); // 40% fan speed
     } else if (heartRate >= 130 && heartRate < 140) {
-        analogWrite(PWM_PIN, TRIAC_MAX * 0.50); // Imposta il ventilatore al 75% della velocità massima
+        analogWrite(PWM_PIN, TRIAC_MAX * 0.50); // 50% fan speed
     } else if (heartRate >= 140 && heartRate < 150) {
-        analogWrite(PWM_PIN, TRIAC_MAX * 0.65); // Imposta il ventilatore al 75% della velocità massima
+        analogWrite(PWM_PIN, TRIAC_MAX * 0.65); // 65% fan speed
     } else if (heartRate >= 150 && heartRate < 160) {
-        analogWrite(PWM_PIN, TRIAC_MAX * 0.8); // Imposta il ventilatore al 75% della velocità massima
+        analogWrite(PWM_PIN, TRIAC_MAX * 0.8); // 80% fan speed
     } else {
-        analogWrite(PWM_PIN, TRIAC_MAX); // Imposta il ventilatore alla massima velocità per battiti cardiaci elevati
+        analogWrite(PWM_PIN, TRIAC_MAX); // 100% fan speed
     }
 }
 
